@@ -12,7 +12,9 @@ const parser = StructuredOutputParser.fromZodSchema(
   z.object({
     answer: z
       .string()
-      .describe("answer to the user's question, not including any product IDs, and only using product titles and descriptions"),
+      .describe(
+        "answer to the user's question, not including any product IDs, and only using product titles and descriptions"
+      ),
     productIds: z
       .array(z.string())
       .describe(
@@ -30,14 +32,19 @@ const prompt = new PromptTemplate({
   partialVariables: { format_instructions: parser.getFormatInstructions() },
 });
 
-
 /**
  * Route handler for POST chat
  *
  * @param { RouteContext } route context - see: https://docs.gadget.dev/guides/http-routes/route-configuration#route-context
  *
  */
-export default async function route({ request, reply, api, logger, connections }) {
+export default async function route({
+  request,
+  reply,
+  api,
+  logger,
+  connections,
+}) {
   const model = new OpenAI({
     temperature: 0,
     openAIApiKey: connections.openai.configuration.apiKey,
@@ -50,7 +57,10 @@ export default async function route({ request, reply, api, logger, connections }
   const chain = new LLMChain({ llm: model, prompt, outputParser: parser });
 
   // embed the incoming message from the user
-  const response = await connections.openai.embeddings.create({ input: request.body.message, model: "text-embedding-ada-002" });
+  const response = await connections.openai.embeddings.create({
+    input: request.body.message,
+    model: "text-embedding-ada-002",
+  });
 
   // find similar product descriptions
   const products = await api.shopifyProduct.findMany({
@@ -63,15 +73,23 @@ export default async function route({ request, reply, api, logger, connections }
   });
 
   // capture products in Gadget's Logs
-  logger.info({ products, message: request.body.message }, "found products most similar to user input");
+  logger.info(
+    { products, message: request.body.message },
+    "found products most similar to user input"
+  );
 
-  // JSON-stringify the structured product data to pass to the LLM
+  // Filter products with an 'active' status and then JSON-stringify
+  // the structured product data to pass to the LLM
   const productString = products
+    .filter((product) => product.status === "active")
     .map((product) =>
       JSON.stringify({
         id: product.id,
         title: product.title,
         description: product.body,
+        noofdaysdelivery: product.noofdaysdelivery,
+        sport: product.sport,
+        status: product.status,
       })
     )
     .join("\n");
@@ -79,7 +97,7 @@ export default async function route({ request, reply, api, logger, connections }
   // set up a new stream for returning the response from OpenAI
   // any data added to the stream will be streamed from Gadget to the route caller
   // in this case, the route caller is the frontend
-  const stream = new Readable({ read() { } });
+  const stream = new Readable({ read() {} });
 
   try {
     // start to return the stream immediately
@@ -87,19 +105,25 @@ export default async function route({ request, reply, api, logger, connections }
 
     let tokenText = "";
     // invoke the chain and add the streamed response tokens to the Readable stream
-    const resp = await chain.call({ question: request.body.message, products: productString }, [
-      new ConsoleCallbackHandler(),
-      {
-        // as the response is streamed in from OpenAI, stream it to the Gadget frontend
-        handleLLMNewToken: (token) => {
-          tokenText += token;
-          // parse out some of the response formatting tokens
-          if (tokenText.includes('"answer": "') && !tokenText.includes('",\n')) {
-            stream.push(token);
-          }
+    const resp = await chain.call(
+      { question: request.body.message, products: productString },
+      [
+        new ConsoleCallbackHandler(),
+        {
+          // as the response is streamed in from OpenAI, stream it to the Gadget frontend
+          handleLLMNewToken: (token) => {
+            tokenText += token;
+            // parse out some of the response formatting tokens
+            if (
+              tokenText.includes('"answer": "') &&
+              !tokenText.includes('",\n')
+            ) {
+              stream.push(token);
+            }
+          },
         },
-      },
-    ]);
+      ]
+    );
 
     // grab the complete response to store records in Chat Log model
     const { answer, productIds } = resp.text;
@@ -145,7 +169,10 @@ export default async function route({ request, reply, api, logger, connections }
       }
     }
 
-    logger.info({ answer, selectedProducts }, "answer and products being sent to the frontend for display");
+    logger.info(
+      { answer, selectedProducts },
+      "answer and products being sent to the frontend for display"
+    );
 
     // send the selected product to the stream
     stream.push(JSON.stringify({ products: selectedProducts }));
@@ -172,4 +199,4 @@ route.options = {
       required: ["message"],
     },
   },
-}
+};

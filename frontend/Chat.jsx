@@ -29,7 +29,9 @@ export const Chat = () => {
             body: JSON.stringify({ message: userMessage }),
           });
 
-          const decodedStreamReader = stream.pipeThrough(new TextDecoderStream()).getReader();
+          const decodedStreamReader = stream
+            .pipeThrough(new TextDecoderStream())
+            .getReader();
 
           // handle any stream errors
           decodedStreamReader.closed.catch((error) => {
@@ -39,7 +41,8 @@ export const Chat = () => {
           let replyText = "";
           let done = false;
           while (!done) {
-            const { value, done: doneReading } = await decodedStreamReader.read();
+            const { value, done: doneReading } =
+              await decodedStreamReader.read();
 
             done = doneReading;
 
@@ -78,10 +81,23 @@ export const Chat = () => {
           <div>
             {productRecommendations?.products ? (
               productRecommendations.products.map((product, i) => (
-                <a key={`${i}_${product.title}`} href={"https://" + product.shop.domain + "/products/" + product.handle} target="_blank">
+                <a
+                  key={`${i}_${product.title}`}
+                  href={
+                    "https://" +
+                    product.shop.domain +
+                    "/products/" +
+                    product.handle
+                  }
+                  target="_blank"
+                >
                   {product.title}
                   {product.images.edges[0] && (
-                    <img style={{ border: "1px black solid" }} width="200px" src={product.images.edges[0].node.source} />
+                    <img
+                      style={{ border: "1px black solid" }}
+                      width="200px"
+                      src={product.images.edges[0].node.source}
+                    />
                   )}
                 </a>
               ))
